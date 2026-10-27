@@ -1,0 +1,33 @@
+# A normal endoscopy clinic day, squeezed into about 3 minutes:
+# 20 patients registered, ordered and booked, then the usual few changes.
+# Use it to check the worklist fills up correctly and every message gets AA.
+#
+#   dotnet run --project src/Hopital -- run scenarios/clinic-day.yaml
+
+name: Normal clinic day
+description: 20 patients registered, ordered and booked, then an update, a cancel and two status changes.
+
+seed: 100
+patients: 20
+firstAppointment: "07:30"
+appointmentSpacing: 20m
+spacing: 3s
+ackTimeout: 30s
+
+steps:
+  - forEachPatient:
+      - send: adt-a04
+      - send: orm-new
+      - send: siu-s12
+
+  # Later in the day:
+  - send: adt-a08              # patient 4 calls in with a new address and phone
+    patient: 4
+  - send: orm-cancel           # patient 11 cancels before the procedure
+    patient: 11
+  - send: orm-status           # patient 1's procedure starts...
+    patient: 1
+    status: IP
+  - send: orm-status           # ...and finishes
+    patient: 1
+    status: CM

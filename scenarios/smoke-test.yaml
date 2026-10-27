@@ -1,0 +1,53 @@
+# Smoke test: 3 patients, each registered, ordered and booked, then one cancel.
+# Short enough to check a new setup end to end. It also shows every scenario field.
+#
+#   dotnet run --project src/Hopital -- run scenarios/smoke-test.yaml --port 6661
+#   dotnet run --project src/Hopital -- run scenarios/smoke-test.yaml --dry-run
+
+name: Smoke test
+description: Three patients through register, order and booking, then one cancel.
+
+seed: 1                    # same seed, same made-up patients and orders
+patients: 3                # patients 1 to 3; patient N has order N
+# duplicates: { 4: 1 }     # patient 4 = patient 1 registered again under a new MRN (for merges)
+
+firstAppointment: "08:00"  # order/appointment times today
+appointmentSpacing: 30m
+spacing: 500ms             # wait between messages unless a step sets its own delay
+ackTimeout: 10s            # how long to wait for each ACK
+
+header:                    # optional MSH overrides; leave out to use the defaults
+  version: "2.5.1"         # MSH-12, e.g. "2.3"
+  # sendingApplication: EPIC
+  # sendingFacility: HOPITAL
+  # receivingApplication: OIE
+  # receivingFacility: IMAGING
+  # processingId: P
+
+steps:
+  # Repeated for patients 1, 2 and 3 in turn.
+  - forEachPatient:
+      - send: adt-a04          # register
+      - send: orm-new          # new order (ORC-1 NW, ORC-5 SC)
+      - send: siu-s12          # appointment booked
+        minutes: 45
+
+  - wait: 1s                   # an extra pause on top of the next message's delay
+
+  # Steps outside forEachPatient name the patient.
+  - send: adt-a08              # update: new address and phone
+    patient: 2
+  - send: orm-cancel           # cancel order 3 (ORC-1 CA)
+    patient: 3
+    delay: 2s                  # replaces spacing for this message
+    expect: AA                 # AA (default), AE, AR, any (some ACK) or none (no ACK expected)
+
+  # Other sends:
+  #   orm-status  with status: IP   (ORC-1 SC, ORC-5 IP = procedure started)
+  #   adt-a40     with merged: 4    (merge patient 4 into this patient)
+  #   resend                        (the previous message again, byte for byte)
+  #   raw         with text: |      (any text, one segment per line; {controlId} and {now} are filled in)
+  # Options on any send:
+  #   controlId: SOME-ID            (use this MSH-10, e.g. to reuse one)
+  #   label: what this step is      (shown in the output)
+  #   framing: no-trailing-cr       (or no-end-block, junk-before, none)

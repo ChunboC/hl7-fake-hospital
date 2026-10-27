@@ -1,0 +1,34 @@
+# An order is cancelled in Epic after the procedure has already started.
+#
+# This happens (wrong patient, order entered twice, procedure aborted) and the
+# receiver has to decide: refuse the cancel, or accept it and flag the study for
+# follow-up because images may already exist. Change 'any' on the cancel to the
+# answer the system under test should give once that is decided.
+#
+#   dotnet run --project src/Hopital -- run scenarios/cancel-after-start.yaml
+
+name: Cancel after start
+description: Order placed and booked, procedure starts (ORC-5 IP), then Epic cancels the order.
+
+seed: 300
+patients: 1
+spacing: 2s
+ackTimeout: 30s
+
+steps:
+  - send: adt-a04
+    patient: 1
+  - send: orm-new
+    patient: 1
+  - send: siu-s12
+    patient: 1
+
+  - send: orm-status
+    patient: 1
+    status: IP                 # procedure in progress
+    delay: 5s
+
+  - send: orm-cancel
+    patient: 1
+    delay: 10s
+    expect: any

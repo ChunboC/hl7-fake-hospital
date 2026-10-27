@@ -1,0 +1,21 @@
+# A burst of 500 messages with no pause: 250 patients, each registered and ordered.
+#
+# Like Epic catching up after the interface was down. Checks throughput and that
+# nothing is dropped or answered out of order. Watch the summary's ACK times.
+#
+#   dotnet run --project src/Hopital -- run scenarios/burst-500.yaml
+
+name: Burst of 500
+description: 250 patients x (A04 + new order) = 500 messages back to back.
+
+seed: 600
+patients: 250
+firstAppointment: "07:00"
+appointmentSpacing: 2m
+spacing: 0s
+ackTimeout: 30s
+
+steps:
+  - forEachPatient:
+      - send: adt-a04
+      - send: orm-new

@@ -1,0 +1,22 @@
+# systemd unit for the fake Epic receiver on the Pi.
+# install.sh fills in @USER@ and @HOME@ and copies this to /etc/systemd/system/.
+#
+#   sudo systemctl status hopital-receiver
+#   journalctl -u hopital-receiver -f        # follow the log
+#   sudo systemctl restart hopital-receiver
+
+[Unit]
+Description=Hopital fake Epic receiver (HL7 results over MLLP)
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=@USER@
+WorkingDirectory=@HOME@/hopital
+ExecStart=@HOME@/hopital/Hopital receive --port 6662 --control-port 6680 --out @HOME@/hopital/received
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

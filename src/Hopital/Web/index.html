@@ -1,0 +1,744 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hopital</title>
+<style>
+  :root {
+    --bg: #f5f6f8; --panel: #ffffff; --text: #1d2330; --muted: #5d6677; --line: #dde1e8;
+    --accent: #2f5fd0; --input: #ffffff;
+    --accept: #1f8a4c; --error: #b7791f; --reject: #c53030; --hang: #6b46c1; --drop: #c05621; --offline: #4a5568;
+    --ok-bg: #e6f4ec; --bad-bg: #fbeaea; --warn-bg: #fdf3e1;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #14171d; --panel: #1c2028; --text: #e4e7ec; --muted: #9aa3b2; --line: #2e3440;
+      --accent: #7aa2ff; --input: #232833;
+      --accept: #48bb78; --error: #ecc94b; --reject: #fc8181; --hang: #b794f4; --drop: #f6ad55; --offline: #a0aec0;
+      --ok-bg: #1d3328; --bad-bg: #3a2020; --warn-bg: #3a3020;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  header { display: flex; align-items: center; gap: 12px; padding: 12px 20px; border-bottom: 1px solid var(--line); background: var(--panel); }
+  header h1 { font-size: 18px; margin: 0; }
+  header .sub { color: var(--muted); }
+  #live { margin-left: auto; display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 13px; }
+  #live .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--reject); }
+  #live.on .dot { background: var(--accept); }
+  main { display: grid; gap: 16px; padding: 16px 20px; max-width: 1400px; margin: 0 auto; }
+  section { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; min-width: 0; }
+  section h2 { font-size: 15px; margin: 0 0 10px; }
+  .muted { color: var(--muted); }
+  .mode-now { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 14px; margin-bottom: 12px; }
+  .badge { display: inline-block; padding: 2px 10px; border-radius: 999px; color: #fff; font-weight: 600; }
+  .mode-now .badge { font-size: 16px; padding: 3px 14px; }
+  [data-mode="Accept"] { --m: var(--accept); } [data-mode="Error"] { --m: var(--error); } [data-mode="Reject"] { --m: var(--reject); }
+  [data-mode="Hang"] { --m: var(--hang); } [data-mode="Drop"] { --m: var(--drop); } [data-mode="Offline"] { --m: var(--offline); }
+  .badge[data-mode] { background: var(--m); }
+  @media (prefers-color-scheme: dark) { .badge[data-mode] { color: #14171d; } }
+  .modes { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 8px; }
+  .modes button { text-align: left; padding: 8px 10px; border: 1px solid var(--line); border-left: 4px solid var(--m); border-radius: 6px;
+    background: var(--input); color: var(--text); cursor: pointer; font: inherit; }
+  .modes button:hover { border-color: var(--m); }
+  .modes button.current { background: color-mix(in srgb, var(--m) 14%, var(--input)); border-color: var(--m); }
+  .modes button b { display: block; }
+  .modes button span { color: var(--muted); font-size: 12px; }
+  fieldset { border: 1px solid var(--line); border-radius: 6px; margin: 12px 0 0; padding: 8px 12px 10px; }
+  legend { color: var(--muted); padding: 0 4px; }
+  .row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; }
+  label { display: inline-flex; align-items: center; gap: 6px; }
+  input[type=number], input[type=text], select { background: var(--input); color: var(--text); border: 1px solid var(--line); border-radius: 4px; padding: 4px 6px; font: inherit; }
+  input[type=number] { width: 70px; }
+  input[type=text] { min-width: 220px; }
+  .note { margin-top: 8px; min-height: 1.4em; font-size: 13px; }
+  .note.bad { color: var(--reject); }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 5px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  th { color: var(--muted); font-weight: 600; font-size: 12px; }
+  .table-scroll { overflow-x: auto; }
+  tr.fresh { animation: fresh 2s ease-out; }
+  @keyframes fresh { from { background: color-mix(in srgb, var(--accent) 22%, transparent); } }
+  .answer { font-weight: 600; }
+  .answer.AA { color: var(--accept); } .answer.AE { color: var(--error); } .answer.AR { color: var(--reject); } .answer.none { color: var(--hang); }
+  .warn { color: var(--error); }
+  code, pre { font-family: ui-monospace, Consolas, monospace; font-size: 12.5px; }
+  @media (min-width: 1100px) {
+    main { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: start; }
+    #received { grid-column: 1 / -1; }
+  }
+  button.action { padding: 6px 14px; border-radius: 6px; border: 1px solid var(--line); background: var(--input); color: var(--text); font: inherit; cursor: pointer; }
+  button.action.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  @media (prefers-color-scheme: dark) { button.action.primary { color: #14171d; } }
+  button.action:disabled { opacity: .45; cursor: default; }
+  #scenario { width: 100%; }
+  .scenario-about { margin: 6px 0 10px; font-size: 13px; }
+  .scenario-about .bad { color: var(--reject); }
+  .target input[type=text] { min-width: 0; width: 180px; }
+  .target input[type=number] { width: 80px; }
+  .progress { height: 8px; border-radius: 4px; background: var(--line); overflow: hidden; margin: 10px 0 6px; }
+  .progress div { height: 100%; width: 0; background: var(--accept); transition: width .2s; }
+  .progress.has-failures div { background: var(--error); }
+  .run-line { display: flex; flex-wrap: wrap; gap: 4px 14px; align-items: baseline; }
+  .state { font-weight: 600; }
+  .state.running { color: var(--accent); } .state.finished { color: var(--accept); } .state.stopped, .state.failed { color: var(--reject); }
+  .results-scroll { max-height: 360px; overflow: auto; margin-top: 8px; border: 1px solid var(--line); border-radius: 6px; }
+  .results-scroll table th { position: sticky; top: 0; background: var(--panel); }
+  tr.not-expected td { background: var(--bad-bg); }
+  td.detail { white-space: normal; min-width: 200px; }
+  .summary { margin: 10px 0 0; padding: 8px 10px; background: var(--bg); border-radius: 6px; white-space: pre-wrap; }
+  .preview details { border-bottom: 1px solid var(--line); padding: 4px 0; }
+  .preview summary { cursor: pointer; }
+  .preview pre { margin: 6px 0 4px; padding: 8px; background: var(--bg); border-radius: 6px; overflow-x: auto; }
+  #received-rows tr { cursor: pointer; }
+  #received-rows tr:hover td, #received-rows tr:focus td { background: color-mix(in srgb, var(--accent) 8%, transparent); outline: none; }
+  dialog#viewer { width: min(1200px, calc(100vw - 32px)); max-height: calc(100vh - 32px); padding: 0; border: 1px solid var(--line); border-radius: 8px;
+    background: var(--panel); color: var(--text); }
+  dialog#viewer::backdrop { background: rgb(0 0 0 / .45); }
+  .viewer-head { position: sticky; top: 0; z-index: 1; display: flex; align-items: center; gap: 12px; padding: 12px 16px; background: var(--panel); border-bottom: 1px solid var(--line); }
+  .viewer-head h2 { margin: 0; font-size: 16px; }
+  .viewer-head .action { margin-left: auto; }
+  .viewer-body { padding: 12px 16px 16px; }
+  .viewer-body h3 { font-size: 13px; margin: 16px 0 6px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+  .facts { display: grid; grid-template-columns: repeat(auto-fill, minmax(135px, 1fr)); gap: 6px 16px; }
+  .facts div span { display: block; color: var(--muted); font-size: 12px; }
+  .facts div b { font-weight: 500; overflow-wrap: anywhere; }
+  .problems { margin: 0; padding-left: 18px; color: var(--error); }
+  .attachments { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 10px; }
+  .attachment { border: 1px solid var(--line); border-radius: 6px; padding: 8px; font-size: 13px; min-width: 0; }
+  .attachment img { display: block; max-width: 100%; max-height: 260px; margin: 0 auto 6px; background: repeating-conic-gradient(#8882 0 25%, transparent 0 50%) 0 0 / 16px 16px; }
+  .attachment img.tiny { height: 96px; image-rendering: pixelated; }
+  .attachment .bad { color: var(--reject); }
+  .attachment a { color: var(--accent); overflow-wrap: anywhere; }
+  .segments { margin: 0; padding: 8px 10px; background: var(--bg); border-radius: 6px; overflow-x: auto; line-height: 1.6; }
+  .segments .seg { font-weight: 700; color: var(--accent); }
+  .segments .f:hover { background: color-mix(in srgb, var(--accent) 20%, transparent); border-radius: 2px; }
+  .segments .sep { color: var(--muted); }
+  .segments .cut { color: var(--muted); font-style: italic; }
+  .viewer-links { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 8px; font-size: 13px; }
+  .viewer-links a { color: var(--accent); }
+  .field-info { min-height: 1.5em; margin-top: 6px; font-size: 13px; color: var(--muted); overflow-wrap: anywhere; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Hopital</h1>
+  <span class="sub">fake Epic</span>
+  <div id="live" title="Live updates from the receiver"><span class="dot"></span><span id="live-text">connecting…</span></div>
+</header>
+
+<main>
+  <section id="scenarios">
+    <h2>Send a scenario</h2>
+    <select id="scenario"><option>Loading…</option></select>
+    <div class="scenario-about" id="scenario-about"></div>
+    <div class="row target">
+      <label>To host <input type="text" id="target-host" placeholder="OIE host" spellcheck="false"></label>
+      <label>port <input type="number" id="target-port" min="1" max="65535"></label>
+    </div>
+    <div class="row" style="margin-top:10px">
+      <button class="action primary" id="run">Run</button>
+      <button class="action" id="stop" disabled>Stop</button>
+      <button class="action" id="preview">Preview messages</button>
+    </div>
+    <div class="note" id="run-note"></div>
+
+    <div id="run-panel" hidden>
+      <div class="run-line">
+        <span class="state" id="run-state"></span>
+        <span id="run-what"></span>
+        <span class="muted" id="run-counts"></span>
+      </div>
+      <div class="progress" id="run-progress"><div></div></div>
+      <label class="muted"><input type="checkbox" id="only-failed"> only messages not as expected</label>
+      <div class="results-scroll">
+        <table>
+          <thead><tr><th>#</th><th>Step</th><th>Control ID</th><th>Result</th><th>Expected</th><th>ms</th><th>Detail</th></tr></thead>
+          <tbody id="result-rows"></tbody>
+        </table>
+      </div>
+      <pre class="summary" id="run-summary" hidden></pre>
+    </div>
+
+    <div class="preview" id="preview-panel" hidden>
+      <div class="run-line" style="margin-top:6px"><b>Preview</b><span class="muted" id="preview-what"></span>
+        <button class="action" id="preview-close" style="margin-left:auto">Close</button></div>
+      <div id="preview-list"></div>
+    </div>
+  </section>
+
+  <section id="receiver">
+    <h2>Receiver</h2>
+    <div class="mode-now">
+      <span class="badge" id="mode-badge">…</span>
+      <span id="mode-detail" class="muted"></span>
+      <span id="counts" class="muted"></span>
+    </div>
+
+    <div class="modes" id="mode-buttons">
+      <button data-mode="Accept"><b>Accept</b><span>Reply AA</span></button>
+      <button data-mode="Error"><b>Error</b><span>Reply AE (try again later)</span></button>
+      <button data-mode="Reject"><b>Reject</b><span>Reply AR (refused)</span></button>
+      <button data-mode="Hang"><b>Hang</b><span>Never reply</span></button>
+      <button data-mode="Drop"><b>Drop</b><span>Close the connection</span></button>
+      <button data-mode="Offline"><b>Offline</b><span>Refuse connections</span></button>
+    </div>
+
+    <fieldset>
+      <legend>When switching away from Accept</legend>
+      <div class="row">
+        <label><input type="radio" name="until" value="change" checked> until I change it</label>
+        <label><input type="radio" name="until" value="messages"> for the next <input type="number" id="messages" min="1" value="3"> messages</label>
+        <label><input type="radio" name="until" value="time"> for <input type="number" id="time" min="1" value="2">
+          <select id="time-unit"><option value="s">seconds</option><option value="m" selected>minutes</option></select></label>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <label>AE/AR text <input type="text" id="ack-text" placeholder="Fake Epic is in error mode."></label>
+      </div>
+    </fieldset>
+    <div class="note" id="mode-note"></div>
+  </section>
+
+  <section id="received">
+    <h2>Received <span class="muted" id="received-count"></span></h2>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>Time</th><th>Type</th><th>Control ID</th><th>Patient</th><th>Order / document</th><th>Files</th><th>Answer</th><th>From</th></tr></thead>
+        <tbody id="received-rows"></tbody>
+      </table>
+    </div>
+    <p class="muted" id="received-empty">Nothing received yet.</p>
+  </section>
+</main>
+
+<dialog id="viewer">
+  <div class="viewer-head">
+    <h2 id="viewer-title"></h2>
+    <span class="muted" id="viewer-when"></span>
+    <button class="action" id="viewer-close">Close</button>
+  </div>
+  <div class="viewer-body" id="viewer-body"></div>
+</dialog>
+
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+const RECENT = 100;
+let status = null;
+
+function el(tag, props = {}, ...children) {
+  const node = document.createElement(tag);
+  Object.assign(node, props);
+  for (const child of children) node.append(child ?? "");
+  return node;
+}
+
+function time(value) {
+  return value ? new Date(value).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23" }) : "";
+}
+
+function ago(value) {
+  const seconds = Math.round((Date.now() - new Date(value)) / 1000);
+  if (seconds < 5) return "just now";
+  if (seconds < 90) return `${seconds} s ago`;
+  if (seconds < 5400) return `${Math.round(seconds / 60)} min ago`;
+  return time(value);
+}
+
+// ---- Receiver mode ----
+
+function renderStatus() {
+  if (!status) return;
+  const badge = $("mode-badge");
+  badge.textContent = status.mode;
+  badge.dataset.mode = status.mode;
+  for (const button of $("mode-buttons").children)
+    button.classList.toggle("current", button.dataset.mode === status.mode);
+
+  const parts = [];
+  if (status.remainingMessages != null)
+    parts.push(`back to Accept after ${status.remainingMessages} more message${status.remainingMessages === 1 ? "" : "s"}`);
+  if (status.until) {
+    const left = Math.max(0, Math.round((new Date(status.until) - Date.now()) / 1000));
+    parts.push(`back to Accept in ${left >= 60 ? `${Math.floor(left / 60)} min ${left % 60} s` : `${left} s`}`);
+  }
+  if (status.text) parts.push(`text: “${status.text}”`);
+  $("mode-detail").textContent = parts.join(", ");
+
+  $("counts").textContent = `${status.received} received since start` +
+    (status.lastReceived ? `, last ${ago(status.lastReceived)}` : "");
+}
+
+async function refreshStatus() {
+  const response = await fetch("status");
+  if (response.ok) { status = await response.json(); renderStatus(); }
+}
+
+async function setMode(mode) {
+  const params = new URLSearchParams();
+  if (mode !== "Accept") {
+    const until = document.querySelector("input[name=until]:checked").value;
+    if (until === "messages") params.set("messages", $("messages").value);
+    if (until === "time") params.set("for", $("time").value + $("time-unit").value);
+    const text = $("ack-text").value.trim();
+    if (text && (mode === "Error" || mode === "Reject")) params.set("text", text);
+  }
+  const note = $("mode-note");
+  try {
+    const response = await fetch(`mode/${mode.toLowerCase()}?${params}`, { method: "POST" });
+    if (!response.ok) throw new Error(await response.text());
+    status = await response.json();
+    renderStatus();
+    note.className = "note";
+    note.textContent = "";
+  } catch (error) {
+    note.className = "note bad";
+    note.textContent = `Could not switch to ${mode}: ${error.message}`;
+  }
+}
+
+$("mode-buttons").addEventListener("click", event => {
+  const button = event.target.closest("button");
+  if (button) setMode(button.dataset.mode);
+});
+for (const id of ["messages", "time", "time-unit"])
+  $(id).addEventListener("focus", () => {
+    document.querySelector(`input[name=until][value=${id === "messages" ? "messages" : "time"}]`).checked = true;
+  });
+
+// ---- Received messages ----
+
+function answerOf(summary) {
+  const msa = (summary.ack || "").split(/\r?\n/).find(line => line.startsWith("MSA|"));
+  if (msa) return msa.split("|")[1];
+  return summary.mode === "Hang" ? "no reply" : summary.mode === "Drop" ? "dropped" : summary.mode;
+}
+
+function receivedRow(summary, fresh) {
+  const answer = answerOf(summary);
+  const files = summary.attachments.filter(a => a.file).length;
+  const references = summary.attachments.filter(a => a.reference).length;
+  const problems = summary.attachments.filter(a => a.problem).length + summary.warnings.length;
+  const filesText = [files && `${files} saved`, references && `${references} linked`, problems && `${problems} problem${problems === 1 ? "" : "s"}`]
+    .filter(Boolean).join(", ");
+  const patient = [summary.patientMrn, summary.patientName].filter(Boolean).join(" ");
+  const order = summary.documentNumber || summary.placerOrderNumber || summary.accessionNumber;
+
+  const row = el("tr", { className: fresh ? "fresh" : "", title: `${summary.file} (click to open)`, tabIndex: 0 },
+    el("td", {}, time(summary.receivedAt)),
+    el("td", {}, summary.messageType || "(not HL7)"),
+    el("td", {}, el("code", {}, summary.controlId)),
+    el("td", {}, patient),
+    el("td", {}, order),
+    el("td", { className: problems ? "warn" : "" }, filesText),
+    el("td", { className: `answer ${/^A[AER]$/.test(answer) ? answer : "none"}` }, answer),
+    el("td", { className: "muted" }, summary.from || ""));
+  row.dataset.file = summary.file;
+  return row;
+}
+
+function showReceived(list) {
+  $("received-rows").replaceChildren(...list.map(s => receivedRow(s, false)));
+  updateReceivedCount();
+}
+
+function addReceived(summary) {
+  const rows = $("received-rows");
+  if (rows.querySelector(`tr[data-file="${CSS.escape(summary.file)}"]`)) return;
+  rows.prepend(receivedRow(summary, true));
+  while (rows.children.length > RECENT) rows.lastElementChild.remove();
+  updateReceivedCount();
+}
+
+function updateReceivedCount() {
+  const count = $("received-rows").children.length;
+  $("received-empty").hidden = count > 0;
+  $("received-count").textContent = count ? `(newest ${count})` : "";
+}
+
+async function refreshReceived() {
+  const response = await fetch(`api/received?limit=${RECENT}`);
+  if (response.ok) showReceived(await response.json());
+}
+
+// ---- Scenarios ----
+
+let scenarios = [];
+let run = null;          // the latest run, as the server describes it
+let shownRunId = null;   // whose results the table holds
+const shownResults = new Set();
+
+function remembered(key, fallback) {
+  try { return localStorage.getItem(`hopital.${key}`) ?? fallback; } catch { return fallback; }
+}
+function remember(key, value) {
+  try { localStorage.setItem(`hopital.${key}`, value); } catch { /* private window: just don't remember */ }
+}
+
+$("target-host").value = remembered("host", "");
+$("target-port").value = remembered("port", "6661");
+$("target-host").addEventListener("change", () => remember("host", $("target-host").value.trim()));
+$("target-port").addEventListener("change", () => remember("port", $("target-port").value));
+$("scenario").addEventListener("change", () => { remember("scenario", $("scenario").value); showScenario(); });
+
+function seconds(total) {
+  if (total < 60) return `${+total.toFixed(1)} s`;
+  const minutes = Math.floor(total / 60), rest = Math.round(total % 60);
+  return rest ? `${minutes} min ${rest} s` : `${minutes} min`;
+}
+
+async function loadScenarios() {
+  const response = await fetch("api/scenarios");
+  if (!response.ok) return;
+  scenarios = await response.json();
+  const select = $("scenario");
+  // Start on the small smoke test rather than whatever sorts first (burst-500).
+  const wanted = remembered("scenario", "smoke-test.yaml");
+  select.replaceChildren(...scenarios.map(s =>
+    el("option", { value: s.file, textContent: s.problem ? `${s.name} (has mistakes)` : `${s.name} (${s.messages})` })));
+  if (scenarios.some(s => s.file === wanted)) select.value = wanted;
+  if (!scenarios.length) select.replaceChildren(el("option", { textContent: "No scenarios found" }));
+  showScenario();
+}
+
+function showScenario() {
+  const s = scenarios.find(s => s.file === $("scenario").value);
+  const about = $("scenario-about");
+  if (!s) { about.replaceChildren(); return; }
+  about.replaceChildren(
+    el("span", { className: "muted" }, s.file), " · ",
+    s.problem
+      ? el("span", { className: "bad" }, s.problem)
+      : `${s.messages} message${s.messages === 1 ? "" : "s"}, about ${seconds(s.seconds)} of waits`,
+    s.description ? el("div", {}, s.description) : "");
+  updateButtons();
+}
+
+function updateButtons() {
+  const s = scenarios.find(s => s.file === $("scenario").value);
+  const running = run?.state === "running";
+  $("run").disabled = running || !s || !!s.problem;
+  $("preview").disabled = !s || !!s.problem;
+  $("stop").disabled = !running;
+}
+
+function note(text, bad = true) {
+  const n = $("run-note");
+  n.className = bad ? "note bad" : "note";
+  n.textContent = text;
+}
+
+async function post(url, body) {
+  const response = await fetch(url, {
+    method: "POST",
+    headers: body ? { "Content-Type": "application/json" } : {},
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const text = await response.text();
+  if (!response.ok) throw new Error(text.replace(/^"|"$/g, "") || response.statusText);
+  return text ? JSON.parse(text) : null;
+}
+
+$("run").addEventListener("click", async () => {
+  const host = $("target-host").value.trim(), port = Number($("target-port").value);
+  if (!host) { note("Enter the host to send to (the integration engine)."); $("target-host").focus(); return; }
+  remember("host", host); remember("port", String(port));
+  note("");
+  try {
+    showRun(await post("api/runs", { scenario: $("scenario").value, host, port }));
+  } catch (error) {
+    note(error.message);
+  }
+});
+
+$("stop").addEventListener("click", async () => {
+  try { await post("api/runs/current/stop"); } catch (error) { note(error.message); }
+});
+
+function resultRow(r) {
+  return el("tr", { className: r.passed ? "" : "not-expected" },
+    el("td", {}, r.number),
+    el("td", {}, r.label),
+    el("td", {}, el("code", {}, r.controlId)),
+    el("td", { className: `answer ${{ Accepted: "AA", Error: "AE", Rejected: "AR" }[r.outcome] ?? "none"}` }, r.outcome),
+    el("td", { className: "muted" }, r.expect),
+    el("td", { className: "muted" }, Math.round(r.elapsedMs)),
+    el("td", { className: "detail" }, r.detail));
+}
+
+function addResult(r) {
+  if (shownResults.has(r.number)) return;
+  shownResults.add(r.number);
+  const row = resultRow(r);
+  row.hidden = $("only-failed").checked && r.passed;
+  const box = $("result-rows").closest(".results-scroll");
+  const atBottom = box.scrollTop + box.clientHeight >= box.scrollHeight - 4;
+  $("result-rows").append(row);
+  if (atBottom) box.scrollTop = box.scrollHeight;
+}
+
+$("only-failed").addEventListener("change", () => {
+  for (const row of $("result-rows").children)
+    row.hidden = $("only-failed").checked && !row.classList.contains("not-expected");
+});
+
+// Shows a run's state; when it is a different run from the one on screen, loads its results so far.
+async function showRun(view) {
+  // Ignore news older than what is shown (a short run can finish before the Run button's reply arrives).
+  if (run && (view.id < run.id || (view.id === run.id && run.state !== "running" && view.state === "running"))) return;
+  run = view;
+  $("run-panel").hidden = false;
+  $("preview-panel").hidden = true;
+  const state = $("run-state");
+  state.textContent = { running: "Running", finished: "Finished", stopped: "Stopped", failed: "Failed" }[view.state] ?? view.state;
+  state.className = `state ${view.state}`;
+  $("run-what").textContent = `${view.name} → ${view.host}:${view.port}`;
+  renderCounts();
+  const summary = $("run-summary");
+  summary.hidden = !view.summary.length;
+  summary.textContent = view.summary.join("\n");
+  updateButtons();
+
+  if (shownRunId !== view.id) {
+    shownRunId = view.id;
+    shownResults.clear();
+    $("result-rows").replaceChildren();
+    const response = await fetch("api/runs/current");
+    if (response.ok) {
+      const current = await response.json();
+      if (current.run.id === view.id) current.results.forEach(addResult);
+    }
+  }
+}
+
+function renderCounts() {
+  if (!run) return;
+  const sent = Math.max(run.sent, shownResults.size);
+  const failed = Math.max(run.failed, $("result-rows").querySelectorAll(".not-expected").length);
+  $("run-counts").textContent = `${sent} of ${run.planned} sent` + (failed ? `, ${failed} not as expected` : ", all as expected");
+  const bar = $("run-progress");
+  bar.firstElementChild.style.width = `${run.planned ? (100 * sent / run.planned) : 100}%`;
+  bar.classList.toggle("has-failures", failed > 0);
+}
+
+$("preview").addEventListener("click", async () => {
+  note("");
+  try {
+    const messages = await post("api/runs", { scenario: $("scenario").value, dryRun: true });
+    $("preview-what").textContent = `${$("scenario").value}, ${messages.length} message${messages.length === 1 ? "" : "s"}, nothing sent`;
+    $("preview-list").replaceChildren(...messages.map(m =>
+      el("details", {},
+        el("summary", {}, `#${m.number} ${m.label} `,
+          el("span", { className: "muted" },
+            `${m.delaySeconds ? `after ${seconds(m.delaySeconds)}, ` : ""}expect ${m.expect}${m.framing === "Normal" ? "" : `, framing ${m.framing.replace(/[A-Z]/g, (c, i) => (i ? "-" : "") + c.toLowerCase())}`}`)),
+        el("pre", {}, m.text))));
+    $("preview-panel").hidden = false;
+    $("run-panel").hidden = true;
+  } catch (error) {
+    note(error.message);
+  }
+});
+
+$("preview-close").addEventListener("click", () => {
+  $("preview-panel").hidden = true;
+  $("run-panel").hidden = !run;
+});
+
+// ---- Message viewer ----
+
+const LONG_FIELD = 160;
+
+function fileUrl(day, file) {
+  return `api/files/${encodeURIComponent(day)}/${encodeURIComponent(file)}`;
+}
+
+function size(bytes) {
+  return bytes < 1024 ? `${bytes} bytes` : bytes < 1048576 ? `${(bytes / 1024).toFixed(1)} KB` : `${(bytes / 1048576).toFixed(1)} MB`;
+}
+
+// One segment per line; each field is its own span, named like PID-3, so it can be pointed at.
+function segmentsView(text) {
+  const lines = text.split(/\r?\n/).filter(Boolean);
+  const msh = lines.find(l => l.startsWith("MSH"));
+  const sep = msh?.[3] ?? "|";
+  const componentSep = msh?.[4] ?? "^";
+  const pre = el("pre", { className: "segments" });
+  for (const line of lines) {
+    const parts = line.split(sep);
+    const seg = parts[0];
+    const row = el("div", {}, el("span", { className: "seg" }, seg));
+    parts.slice(1).forEach((value, i) => {
+      // MSH-1 is the separator itself, so MSH fields are numbered one higher.
+      const name = `${seg}-${seg === "MSH" ? i + 2 : i + 1}`;
+      row.append(el("span", { className: "sep" }, sep));
+      if (!value) return;
+      const field = el("span", { className: "f", title: name });
+      field.dataset.name = name;
+      field.dataset.value = value;
+      if (value.length > LONG_FIELD)
+        field.append(value.slice(0, 60), el("span", { className: "cut" }, `… ${(value.length - 60).toLocaleString()} more characters`));
+      else
+        field.append(value);
+      row.append(field);
+    });
+    pre.append(row);
+  }
+  const info = el("div", { className: "field-info" }, "Point at a field to see its name; click it for its components.");
+  pre.addEventListener("click", event => {
+    const field = event.target.closest(".f");
+    if (!field) return;
+    const value = field.dataset.value;
+    const components = value.split(componentSep);
+    const shown = v => v.length > 300 ? `${v.slice(0, 300)}… (${v.length.toLocaleString()} characters)` : v;
+    info.textContent = components.length > 1 && field.dataset.name !== "MSH-2"
+      ? `${field.dataset.name}: ` + components.map((c, i) => `.${i + 1} ${shown(c) || "(empty)"}`).join("   ")
+      : `${field.dataset.name}: ${shown(value)}`;
+  });
+  return [pre, info];
+}
+
+function attachmentView(a, day) {
+  const box = el("div", { className: "attachment" });
+  const kind = [`OBX-${a.obx}`, a.valueType, a.mediaType, a.bytes != null ? size(a.bytes) : ""].filter(Boolean).join(" · ");
+  if (a.file) {
+    const url = fileUrl(day, a.file);
+    // Browsers cannot show TIFF or DICOM; offer those as downloads.
+    if (/^image\/(png|jpeg|gif|bmp)$/.test(a.mediaType ?? ""))
+      box.append(el("a", { href: url, target: "_blank", rel: "noopener" }, el("img", {
+        src: url, alt: `Image from OBX-${a.obx}`, loading: "lazy",
+        // Blow up icon-sized images (like the samples) so they can be seen at all.
+        onload() { this.classList.toggle("tiny", this.naturalHeight < 64); },
+      })));
+    box.append(el("div", {}, kind));
+    box.append(a.mediaType === "application/pdf" || /^image\//.test(a.mediaType ?? "") && !/tiff|dicom/.test(a.mediaType)
+      ? el("a", { href: url, target: "_blank", rel: "noopener" }, a.mediaType === "application/pdf" ? "Open PDF in a new tab" : "Open full size")
+      : el("a", { href: url, download: a.file }, `Download ${a.file}`));
+  } else if (a.reference) {
+    box.append(el("div", {}, `${kind} · reference (not fetched)`));
+    box.append(/^https?:\/\//i.test(a.reference)
+      ? el("a", { href: a.reference, target: "_blank", rel: "noopener noreferrer" }, a.reference)
+      : el("code", {}, a.reference));
+  } else {
+    box.append(el("div", {}, kind));
+  }
+  if (a.problem) box.append(el("div", { className: "bad" }, a.problem));
+  return box;
+}
+
+function factsView(s) {
+  const facts = [
+    ["Received", new Date(s.receivedAt).toLocaleString([], { hourCycle: "h23" })],
+    ["From", s.from],
+    ["Type", s.messageType],
+    ["Control ID (MSH-10)", s.controlId],
+    ["HL7 version", s.version],
+    ["Patient", s.patientName],
+    ["MRN", s.patientMrn],
+    ["Placer order", s.placerOrderNumber],
+    ["Filler order", s.fillerOrderNumber],
+    ["Accession", s.accessionNumber],
+    ["Document (TXA-12)", s.documentNumber],
+    ["Answered", `${answerOf(s)} (mode ${s.mode})`],
+    ["Size", size(s.bytes)],
+  ];
+  return el("div", { className: "facts" },
+    ...facts.filter(([, v]) => v).map(([k, v]) => el("div", {}, el("span", {}, k), el("b", {}, v))));
+}
+
+async function openMessage(file) {
+  const [day, name] = [file.slice(0, file.indexOf("/")), file.slice(file.indexOf("/") + 1).replace(/\.hl7$/, "")];
+  const dialog = $("viewer"), body = $("viewer-body");
+  $("viewer-title").textContent = "Loading…";
+  $("viewer-when").textContent = "";
+  body.replaceChildren();
+  if (!dialog.open) dialog.showModal();
+  if (location.hash !== `#message=${file}`) history.replaceState(null, "", `#message=${file}`);
+
+  const response = await fetch(`api/received/${encodeURIComponent(day)}/${encodeURIComponent(name)}`);
+  if (!response.ok) {
+    $("viewer-title").textContent = "Message not found";
+    body.append(el("p", { className: "muted" }, `${file} is not in the receiver's store (it may have been moved or deleted).`));
+    return;
+  }
+  const { summary: s, text } = await response.json();
+  $("viewer-title").textContent = `${s.messageType || "Not HL7"} ${s.controlId}`;
+  $("viewer-when").textContent = time(s.receivedAt);
+
+  body.append(factsView(s));
+  // Attachment problems are shown on their own cards below.
+  if (s.warnings.length) body.append(el("h3", {}, "Problems"), el("ul", { className: "problems" }, ...s.warnings.map(p => el("li", {}, p))));
+  if (s.attachments.length)
+    body.append(el("h3", {}, `Images and documents (${s.attachments.length})`),
+      el("div", { className: "attachments" }, ...s.attachments.map(a => attachmentView(a, day))));
+  body.append(el("h3", {}, "Message"), ...segmentsView(text));
+  body.append(el("h3", {}, "Our answer"), s.ack ? segmentsView(s.ack)[0] : el("p", { className: "muted" }, answerOf(s)));
+  body.append(el("div", { className: "viewer-links" },
+    el("a", { href: fileUrl(day, `${name}.hl7`), download: `${name}.hl7` }, "Download the .hl7 as received"),
+    el("a", { href: fileUrl(day, `${name}.json`), target: "_blank", rel: "noopener" }, "Summary (JSON)")));
+}
+
+function closeMessage() {
+  if ($("viewer").open) $("viewer").close();
+}
+
+$("viewer-close").addEventListener("click", closeMessage);
+$("viewer").addEventListener("close", () => {
+  // "close" arrives a moment later; if another message was opened meanwhile, keep its link.
+  if (!$("viewer").open && location.hash.startsWith("#message="))
+    history.replaceState(null, "", location.pathname + location.search);
+});
+// Click outside the dialog's box closes it.
+$("viewer").addEventListener("click", event => { if (event.target === $("viewer")) closeMessage(); });
+
+$("received-rows").addEventListener("click", event => {
+  const row = event.target.closest("tr");
+  if (row) openMessage(row.dataset.file);
+});
+$("received-rows").addEventListener("keydown", event => {
+  const row = event.target.closest("tr");
+  if (row && (event.key === "Enter" || event.key === " ")) { event.preventDefault(); openMessage(row.dataset.file); }
+});
+
+function openFromAddress() {
+  const match = decodeURIComponent(location.hash).match(/^#message=(\d{4}-\d{2}-\d{2}\/[^/]+)$/);
+  if (match) openMessage(match[1]); else closeMessage();
+}
+window.addEventListener("hashchange", openFromAddress);
+
+// ---- Live updates ----
+
+function connect() {
+  const live = $("live"), liveText = $("live-text");
+  const events = new EventSource("api/events");
+  events.onopen = () => {
+    live.classList.add("on");
+    liveText.textContent = "live";
+    // Catch up on anything missed while disconnected.
+    refreshReceived();
+  };
+  events.onerror = () => {
+    live.classList.remove("on");
+    liveText.textContent = "reconnecting…";
+  };
+  events.addEventListener("mode", event => { status = JSON.parse(event.data); renderStatus(); });
+  events.addEventListener("received", event => {
+    addReceived(JSON.parse(event.data));
+    // The count and a temporary mode's countdown changed.
+    refreshStatus();
+  });
+  events.addEventListener("run", event => showRun(JSON.parse(event.data)));
+  events.addEventListener("result", event => {
+    const { runId, result } = JSON.parse(event.data);
+    if (runId === shownRunId) { addResult(result); renderCounts(); }
+  });
+}
+
+loadScenarios();
+openFromAddress();
+
+setInterval(renderStatus, 1000);
+connect();
+</script>
+</body>
+</html>

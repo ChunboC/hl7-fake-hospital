@@ -1,0 +1,101 @@
+# Malformed messages and broken MLLP framing.
+#
+# The receiver should survive all of these: answer with AE or AR where it can,
+# never crash or stop accepting messages, and still process the good message at the end.
+# Most steps say 'any' because receivers differ in how they reject bad input;
+# tighten them to AE or AR once the system under test's (or OIE's) behavior is decided.
+# Steps with 'none' send something no receiver can answer, so a timeout is the right result.
+#
+#   dotnet run --project src/Hopital -- run scenarios/malformed.yaml
+
+name: Malformed messages
+description: Bad content, bad framing, then a good message to prove the receiver still works.
+
+seed: 500
+patients: 2
+spacing: 1s
+ackTimeout: 5s                 # short, because two steps are expected to time out
+
+steps:
+  # --- Bad content, correct framing ---
+
+  - send: raw
+    label: not HL7 at all
+    text: THIS IS NOT AN HL7 MESSAGE
+    expect: any
+
+  - send: raw
+    label: no MSH segment
+    text: |
+      EVN|A04|{now}
+      PID|1||91234567^^^HOPITAL^MR||Nobody^Test||19800101|U
+    expect: any
+
+  - send: raw
+    label: unknown message type ZZZ^Z99
+    text: |
+      MSH|^~\&|EPIC|HOPITAL|OIE|IMAGING|{now}||ZZZ^Z99|{controlId}|P|2.5.1
+      ZZZ|1|nothing to see here
+    expect: any
+
+  - send: raw
+    label: unsupported HL7 version 9.9
+    text: |
+      MSH|^~\&|EPIC|HOPITAL|OIE|IMAGING|{now}||ADT^A04^ADT_A01|{controlId}|P|9.9
+      EVN|A04|{now}
+      PID|1||91234567^^^HOPITAL^MR||Nobody^Test||19800101|U
+    expect: any
+
+  - send: raw
+    label: A04 with no MRN (PID-3 empty)
+    text: |
+      MSH|^~\&|EPIC|HOPITAL|OIE|IMAGING|{now}||ADT^A04^ADT_A01|{controlId}|P|2.5.1
+      EVN|A04|{now}
+      PID|1||||Nobody^Test||19800101|U
+      PV1|1|O|ENDO^^^HOPITAL
+    expect: any
+
+  - send: raw
+    label: ORM with no ORC or OBR
+    text: |
+      MSH|^~\&|EPIC|HOPITAL|OIE|IMAGING|{now}||ORM^O01^ORM_O01|{controlId}|P|2.5.1
+      PID|1||91234567^^^HOPITAL^MR||Nobody^Test||19800101|U
+    expect: any
+
+  - send: raw
+    label: "valid A04 using # as the field separator"
+    # Legal HL7: MSH-1 can declare any separator. Receivers that hard-code | fail here.
+    text: |
+      MSH#^~\&#EPIC#HOPITAL#OIE#IMAGING#{now}##ADT^A04^ADT_A01#{controlId}#P#2.5.1
+      EVN#A04#{now}
+      PID#1##91234567^^^HOPITAL^MR##Nobody^Test##19800101#U
+    expect: any
+
+  # --- Good content, broken framing ---
+
+  - send: adt-a04
+    patient: 1
+    framing: no-trailing-cr    # 0x1C without the final 0x0D: many receivers accept it
+    expect: any
+
+  - send: adt-a04
+    patient: 1
+    framing: junk-before       # stray bytes before the start block
+    expect: any
+
+  - send: adt-a04
+    patient: 1
+    framing: none              # no MLLP framing at all: the receiver never sees a message
+    expect: none
+
+  - send: adt-a04
+    patient: 1
+    framing: no-end-block      # starts but never ends: the receiver waits until we hang up
+    expect: none
+
+  # --- And the receiver still works ---
+
+  - send: adt-a04
+    patient: 2
+    label: good message after all of the above
+    expect: AA

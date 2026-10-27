@@ -1,0 +1,19 @@
+# A site that sends scheduling (SIU) instead of orders: registrations and bookings only.
+#
+#   dotnet run --project src/Hopital -- run scenarios/schedule-only-day.yaml
+
+name: Schedule-only clinic day
+description: 10 patients registered and booked with SIU S12, no ORM orders.
+
+seed: 700
+patients: 10
+firstAppointment: "08:00"
+appointmentSpacing: 45m
+spacing: 2s
+ackTimeout: 30s
+
+steps:
+  - forEachPatient:
+      - send: adt-a04
+      - send: siu-s12
+        minutes: 45

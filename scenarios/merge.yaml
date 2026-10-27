@@ -1,0 +1,36 @@
+# A patient registered twice is merged.
+#
+# Patient 2 is the same person as patient 1 (same name, birth date and address)
+# under a second MRN, and has an order of their own. The A40 merges MRN 2 into MRN 1.
+# After running this, check that both orders now belong to patient 1 on the receiving
+# side and that the update after the merge lands on the right record.
+#
+#   dotnet run --project src/Hopital -- run scenarios/merge.yaml
+
+name: Merge
+description: Same person registered under two MRNs, each with an order, then merged with A40.
+
+seed: 400
+patients: 1
+duplicates: { 2: 1 }
+spacing: 2s
+ackTimeout: 30s
+
+steps:
+  - send: adt-a04
+    patient: 1
+  - send: orm-new
+    patient: 1
+
+  - send: adt-a04              # the duplicate registration
+    patient: 2
+  - send: orm-new              # an order placed on the duplicate record
+    patient: 2
+
+  - send: adt-a40              # merge MRN 2 into MRN 1
+    patient: 1
+    merged: 2
+    delay: 5s
+
+  - send: adt-a08              # an update after the merge, using the surviving MRN
+    patient: 1

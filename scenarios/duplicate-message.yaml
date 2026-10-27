@@ -1,0 +1,44 @@
+# Duplicate messages: the same MSH-10 control ID arrives more than once.
+#
+# Epic resends a message, unchanged, when its ACK is lost or late. A correct receiver
+# ACKs the resend (AA) but does not process it again. After running this, check that
+# patient 1 has exactly one order on the receiving side.
+#
+#   dotnet run --project src/Hopital -- run scenarios/duplicate-message.yaml
+
+name: Duplicate message
+description: Exact resends of an order, right away and after a pause, then a different message reusing a control ID.
+
+seed: 200
+patients: 2
+spacing: 1s
+ackTimeout: 30s
+
+steps:
+  - send: adt-a04
+    patient: 1
+  - send: orm-new
+    patient: 1
+
+  # 1. Exact resend straight away, byte for byte (same MSH-10, same MSH-7).
+  - send: resend
+    label: resend of the order straight away
+    expect: AA
+
+  # 2. Exact resend after a pause, as when Epic gives up waiting and retries.
+  - send: resend
+    label: resend of the order after 10 s
+    delay: 10s
+    expect: AA
+
+  # 3. A different message that reuses an earlier control ID: a sender bug.
+  #    Some receivers ACK it, some reject it as a duplicate. Change 'any' to the
+  #    answer the system under test should give once that is decided.
+  - send: adt-a04
+    patient: 2
+    controlId: HOPDUPLICATE00000001
+  - send: orm-new
+    patient: 2
+    controlId: HOPDUPLICATE00000001
+    label: new order reusing the A04's control ID
+    expect: any
